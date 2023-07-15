@@ -17,6 +17,7 @@
 #define CONFIG_BLINK_LED_GPIO 1
 #define CONFIG_BLINK_GPIO 5
 #define CONFIG_BLINK_PERIOD 1000
+#define INPUT_FASTER_GPIO 15
 
 static const char *TAG = "riws-blink";
 
@@ -63,10 +64,10 @@ static void configure_led(void)
 
 #elif CONFIG_BLINK_LED_GPIO
 
-static void blink_led(void)
+static void blink_led(unsigned int led_state)
 {
     /* Set the GPIO level according to the state (LOW or HIGH)*/
-    gpio_set_level(BLINK_GPIO, s_led_state);
+    gpio_set_level(BLINK_GPIO, led_state);
 }
 
 static void configure_led(void)
@@ -75,6 +76,8 @@ static void configure_led(void)
     gpio_reset_pin(BLINK_GPIO);
     /* Set the GPIO as a push/pull output */
     gpio_set_direction(BLINK_GPIO, GPIO_MODE_OUTPUT);
+    gpio_reset_pin(INPUT_FASTER_GPIO);
+    gpio_set_direction(INPUT_FASTER_GPIO, GPIO_MODE_INPUT);
 }
 
 #endif
@@ -82,14 +85,24 @@ static void configure_led(void)
 void app_main(void)
 {
 
+    unsigned int go_faster = 0;
+    int time_delay = CONFIG_BLINK_PERIOD;
+
     /* Configure the peripheral according to the LED type */
     configure_led();
 
     while (1) {
         ESP_LOGI(TAG, "Turning the LED %s!", s_led_state == true ? "ON" : "OFF");
-        blink_led();
-        /* Toggle the LED state */
+        blink_led(s_led_state);
         s_led_state = !s_led_state;
-        vTaskDelay(CONFIG_BLINK_PERIOD / portTICK_PERIOD_MS);
+        // https://docs.espressif.com/projects/esp-idf/en/latest/esp32/api-reference/peripherals/gpio.html
+        go_faster = gpio_get_level(INPUT_FASTER_GPIO);
+        if (go_faster) {
+            time_delay = CONFIG_BLINK_PERIOD / 4;
+            ESP_LOGI(TAG, "Going faster!");
+        } else {
+            time_delay = CONFIG_BLINK_PERIOD;
+        }
+        vTaskDelay(time_delay / portTICK_PERIOD_MS);
     }
 }
